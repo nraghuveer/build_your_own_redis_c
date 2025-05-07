@@ -33,6 +33,7 @@ HNode **h_lookup(HTab *htab, HNode *key, bool (*eq)(HNode *, HNode *));
 HNode *h_detach(HTab *htab, HNode **from);
 
 void hm_trigger_rehasing(HMap *hmap);
+void hm_help_rehashing(HMap *hmap);
 HNode *h_lookup(HMap *hmap, HNode *key, bool (*eq)(HNode *, HNode *));
 HNode *hm_delete(HMap *hmap, HNode *key, bool (*eq)(HNode *, HNode *));
 void hm_insert(HMap *hmap, HNode *node);

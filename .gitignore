@@ -1,0 +1,26 @@
+# Ignore all g++
+ generated files
+
+# Executable
+ output
+a.out
+
+# Object
+ files
+*.o
+
+# Precompiled
+ headers
+*.gch
+
+# Dependency files
+
+*.d
+
+# Static libraries
+
+*.a
+
+# Shared libraries
+
+*.so
