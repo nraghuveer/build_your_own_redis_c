@@ -2,6 +2,7 @@
 #include "hashtable.hpp"
 #include <assert.h>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <errno.h>
 #include <fcntl.h>
@@ -221,7 +222,8 @@ static int32_t parse_request(const uint8_t *data, size_t size,
   const uint8_t *end = data + size; // advance by size bytes
 
   uint32_t nstr = 0;
-  if (!read_u32(data, end, nstr))
+  int result;
+  if ((result = read_u32(data, end, nstr)) != 0)
   {
     return -1;
   }
@@ -236,7 +238,7 @@ static int32_t parse_request(const uint8_t *data, size_t size,
   while (out.size() < nstr)
   {
     uint32_t len = 0;
-    if (!read_u32(data, end, len))
+    if (read_u32(data, end, len))
     {
       return -1;
     }
@@ -245,7 +247,8 @@ static int32_t parse_request(const uint8_t *data, size_t size,
       return -1;
     }
     out.push_back(std::string());
-    if (!read_str(data, end, len, out.back()))
+    int read_str_result = read_str(data, end, len, out.back());
+    if (read_str_result)
     {
       return -1;
     }
@@ -284,12 +287,15 @@ static bool try_one_request(Conn *conn)
 
   const uint8_t *request = &conn->incoming[4];
   std::vector<std::string> cmd;
-  if (parse_request(request, len, cmd))
+  if (parse_request(request, len, cmd) < 0)
   {
-    Response resp;
-    do_request(cmd, resp);
-    make_response(resp, conn->outgoing);
+        msg("bad request");
+        conn->want_to_close = true;
+        return false;   // want close
   }
+  Response resp;
+  do_request(cmd, resp);
+  make_response(resp, conn->outgoing);
 
   // application logic done! remove the request message.
   buf_consume(conn->incoming, 4 + len);
@@ -493,3 +499,16 @@ int main()
   }
   return 0;
 }
+
+// static int32_t write_all(int fd, const char *buf, size_t n) {
+//     while (n > 0) {
+//         ssize_t rv = write(fd, buf, n);
+//         if (rv <= 0) {
+//             return -1;  // error
+//         }
+//         assert((size_t)rv <= n);
+//         n -= (size_t)rv;
+//         buf += rv;
+//     }
+//     return 0;
+// }
