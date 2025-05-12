@@ -37,6 +37,7 @@ struct Response {
   uint32_t status = 0;
   std::vector<uint8_t> data;
 };
+// static int32_t write_all(int fd, const char *buf, size_t n);
 
 static void do_get(std::vector<std::string> &cmd, Response &out);
 static void do_set(std::vector<std::string> &cmd, Response &);
