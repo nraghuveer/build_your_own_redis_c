@@ -14,34 +14,34 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <vector>
+#include "serialization.hpp"
 
 static struct
 {
   HMap db;
 } g_data;
 
-static void do_request(std::vector<std::string> &cmd, Response &out)
+static void do_request(std::vector<std::string> &cmd, Buffer &out)
 {
   if (cmd.size() == 2 && cmd[0] == "get")
   {
-    do_get(cmd, out);
+    return do_get(cmd, out);
   }
   else if (cmd.size() == 3 && cmd[0] == "set")
   {
-    do_set(cmd, out);
+    return do_set(cmd, out);
   }
   else if (cmd.size() == 2 && cmd[0] == "del")
   {
-    do_del(cmd, out);
+    return do_del(cmd, out);
   }
   else
   {
-    out.status = RES_ERR;
+      return out_err(out, ERR_UNKNOWN, "unknown error.");
   }
-  return;
 }
 
-static void do_del(std::vector<std::string> &cmd, Response &out)
+static void do_del(std::vector<std::string> &cmd, Buffer &buf)
 {
   assert(cmd.size() == 2);
   Entry key;
@@ -52,11 +52,10 @@ static void do_del(std::vector<std::string> &cmd, Response &out)
   {
     delete container_of(node, Entry, node);
   }
-  out.status = R_OK;
-  return;
+  out_int(buf, node ? 1:0);
 }
 
-static void do_set(std::vector<std::string> &cmd, Response &out)
+static void do_set(std::vector<std::string> &cmd, Buffer &buf)
 {
   assert(cmd.size() == 3);
   Entry key;
@@ -75,11 +74,10 @@ static void do_set(std::vector<std::string> &cmd, Response &out)
     ent->val.swap(cmd[2]);
     hm_insert(&g_data.db, &ent->node);
   }
-  out.status = RES_OK;
-  return;
+  out_nil(buf);
 }
 
-static void do_get(std::vector<std::string> &cmd, Response &out)
+static void do_get(std::vector<std::string> &cmd, Buffer &buf)
 {
   assert(cmd.size() == 2);
   Entry key;
@@ -88,13 +86,13 @@ static void do_get(std::vector<std::string> &cmd, Response &out)
   const HNode *lookup_node = h_lookup(&g_data.db, &key.node, entry_eq);
   if (!lookup_node)
   {
-    out.status = RES_NX;
+    out_nil(buf);
     return;
   }
   // copy the value
   const auto &val = container_of(lookup_node, Entry, node)->val;
   assert(val.size() < k_max_msg);
-  out.data.assign(val.begin(), val.end());
+  out_str(buf, val.data(), val.size());
 }
 
 void fd_set_nb(int fd)
@@ -135,60 +133,12 @@ static Conn *handle_accept(int fd)
   return conn;
 }
 
-static void buf_append(std::vector<uint8_t> &buf, const uint8_t *data,
-                       size_t len)
-{
-  buf.insert(buf.end(), data, data + len);
-}
-
-static void buf_consume(std::vector<uint8_t> &buf, size_t n)
-{
-  buf.erase(buf.begin(), buf.begin() + n);
-}
-
 static void make_response(const Response &resp, std::vector<uint8_t> &out)
 {
   uint32_t resp_len = 4 + (uint32_t)resp.data.size();
   buf_append(out, (const uint8_t *)&resp_len, 4);
   buf_append(out, (const uint8_t *)&resp.status, 4);
   buf_append(out, resp.data.data(), resp.data.size());
-}
-
-// process 1 request if there is enough data
-static bool try_one_request_og(Conn *conn)
-{
-  // try to parse the protocol: message header
-  if (conn->incoming.size() < 4)
-  {
-    return false; // want read
-  }
-  uint32_t len = 0;
-  memcpy(&len, conn->incoming.data(), 4);
-  if (len > k_max_msg)
-  {
-    msg("too long");
-    conn->want_to_close = true;
-    return false; // want close
-  }
-  // message body
-  if (4 + len > conn->incoming.size())
-  {
-    return false; // want read
-  }
-  const uint8_t *request = &conn->incoming[4];
-
-  // got one request, do some application logic
-  printf("client says: len:%d data:%.*s\n", len, len < 100 ? len : 100,
-         request);
-
-  // generate the response (echo)
-  buf_append(conn->outgoing, (const uint8_t *)&len, 4);
-  buf_append(conn->outgoing, request, len);
-
-  // application logic done! remove the request message.
-  buf_consume(conn->incoming, 4 + len);
-  // Q: Why not just empty the buffer? See the explanation of "pipelining".
-  return true; // success
 }
 
 static bool read_u32(const uint8_t *&cur, const uint8_t *end, uint32_t &out)
@@ -293,15 +243,19 @@ static bool try_one_request(Conn *conn)
         conn->want_to_close = true;
         return false;   // want close
   }
-  Response resp;
-  do_request(cmd, resp);
-  make_response(resp, conn->outgoing);
+  // we dont the size of header, so reserve some space for the response header
+  size_t header_pos = 0;
+  response_begin(conn->outgoing, &header_pos);
+  do_request(cmd, conn->outgoing);
+  response_end(conn->outgoing, header_pos);
 
   // application logic done! remove the request message.
   buf_consume(conn->incoming, 4 + len);
 
   return true; // success
 }
+
+
 
 static void handle_write(Conn *conn)
 {
@@ -512,3 +466,25 @@ int main()
 //     }
 //     return 0;
 // }
+
+
+static void response_begin(Buffer &buf, size_t *header_pos) {
+    *header_pos = buf.size();
+    buf_append_u32(buf, 0); // place holder for now
+}
+
+static size_t response_size(Buffer &buf, size_t header) {
+    return buf.size() - header - 4;
+}
+
+static void response_end(Buffer &buf, size_t header) {
+    size_t msg_size = buf.size();
+    if (msg_size > k_max_msg) {
+        // we just need 4 bytes for err
+        buf.resize(header + 4);
+        out_err(buf, ERR_TOO_LONG, "response is too big.");
+        msg_size = response_size(buf, header);
+    }
+    uint32_t len = (uint32_t)msg_size;
+    memcpy(&buf[header], &len, 4);
+}

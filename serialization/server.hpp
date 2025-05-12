@@ -1,4 +1,5 @@
 #include "hashtable.hpp"
+#include "serialization.hpp"
 #include "vector"
 
 constexpr size_t k_max_msg = 32 << 20;
@@ -39,10 +40,10 @@ struct Response {
 };
 // static int32_t write_all(int fd, const char *buf, size_t n);
 
-static void do_get(std::vector<std::string> &cmd, Response &out);
-static void do_set(std::vector<std::string> &cmd, Response &);
-static void do_del(std::vector<std::string> &cmd, Response &);
-static void do_request(std::vector<std::string> &cmd, Response &out);
+static void do_get(std::vector<std::string> &cmd, Buffer &);
+static void do_set(std::vector<std::string> &cmd, Buffer &);
+static void do_del(std::vector<std::string> &cmd, Buffer &);
+static void do_request(std::vector<std::string> &cmd, Buffer &);
 
 // Utils
 static void msg(const char *msg) { fprintf(stderr, "%s\n", msg); }
@@ -63,3 +64,8 @@ static uint64_t str_hash(const uint8_t *data, size_t len) {
   }
   return h;
 }
+
+
+static void response_begin(Buffer &buf, size_t *header_pos);
+static void response_end(Buffer &buf, size_t header_pos);
+static size_t response_size(Buffer &buf, size_t header_pos);
