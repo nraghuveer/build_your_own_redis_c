@@ -37,5 +37,8 @@ void hm_help_rehashing(HMap *hmap);
 HNode *h_lookup(HMap *hmap, HNode *key, bool (*eq)(HNode *, HNode *));
 HNode *hm_delete(HMap *hmap, HNode *key, bool (*eq)(HNode *, HNode *));
 void hm_insert(HMap *hmap, HNode *node);
+// for each key, do a callback => void func(HNode *, Buffer &buf)
+void hm_foreach(HMap *hmap, bool (*f)(HNode *, void *), void *arg);
+size_t hm_size(HMap *hmap);
 
 #endif // HASHTABLE_HPP

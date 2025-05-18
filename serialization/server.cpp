@@ -35,6 +35,10 @@ static void do_request(std::vector<std::string> &cmd, Buffer &out)
   {
     return do_del(cmd, out);
   }
+  else if (cmd.size() == 1 && cmd[0] == "keys")
+  {
+      return do_keys(cmd, out);
+  }
   else
   {
       return out_err(out, ERR_UNKNOWN, "unknown error.");
@@ -93,6 +97,18 @@ static void do_get(std::vector<std::string> &cmd, Buffer &buf)
   const auto &val = container_of(lookup_node, Entry, node)->val;
   assert(val.size() < k_max_msg);
   out_str(buf, val.data(), val.size());
+}
+
+static bool cb_keys(HNode *node, void *arg) {
+    Buffer &out = *(Buffer *)arg;
+    const std::string &key = container_of(node, Entry, node)->key;
+    out_str(out, key.data(), key.size());
+    return true;
+}
+
+static void do_keys(std::vector<std::string> &_, Buffer &buf) {
+    out_arr(buf, (uint32_t)hm_size(&g_data.db));
+    hm_foreach(&g_data.db, &cb_keys, (void *)&buf);
 }
 
 void fd_set_nb(int fd)
@@ -478,7 +494,7 @@ static size_t response_size(Buffer &buf, size_t header) {
 }
 
 static void response_end(Buffer &buf, size_t header) {
-    size_t msg_size = buf.size();
+    size_t msg_size = response_size(buf, header);
     if (msg_size > k_max_msg) {
         // we just need 4 bytes for err
         buf.resize(header + 4);

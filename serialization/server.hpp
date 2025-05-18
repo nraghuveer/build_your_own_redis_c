@@ -43,6 +43,7 @@ struct Response {
 static void do_get(std::vector<std::string> &cmd, Buffer &);
 static void do_set(std::vector<std::string> &cmd, Buffer &);
 static void do_del(std::vector<std::string> &cmd, Buffer &);
+static void do_keys(std::vector<std::string> &, Buffer &);
 static void do_request(std::vector<std::string> &cmd, Buffer &);
 
 // Utils
@@ -69,3 +70,4 @@ static uint64_t str_hash(const uint8_t *data, size_t len) {
 static void response_begin(Buffer &buf, size_t *header_pos);
 static void response_end(Buffer &buf, size_t header_pos);
 static size_t response_size(Buffer &buf, size_t header_pos);
+static bool cb_keys(HNode *node, void *arg);

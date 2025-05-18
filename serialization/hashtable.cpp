@@ -117,3 +117,18 @@ void hm_help_rehashing(HMap *hmap)
         hmap->older = HTab{};
     }
 }
+
+void hm_foreach(HMap *hmap, bool (*cb)(HNode *, void *), void *out) {
+    HTab htab = hmap->newer;
+    for (size_t i = 0; i < htab.size; ++i) {
+        HNode *head = htab.tab[i];
+        while (head != nullptr) {
+            cb(head, out);
+            head = head->next;
+        }
+    }
+}
+
+size_t hm_size(HMap *hmap) {
+    return hmap->newer.size + hmap->older.size;
+}

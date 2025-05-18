@@ -76,7 +76,6 @@ static int32_t send_req(int fd, const std::vector<std::string> &cmd) {
     for (const std::string &s : cmd) {
         printf(" - '%s'\n", s.c_str());
     }
-    printf("Current position: %zu\n", cur);
     return write_all(fd, wbuf, 4 + len);
 }
 
@@ -100,7 +99,6 @@ static int32_t read_res(int fd) {
         msg("too long");
         return -1;
     }
-
     // reply body
     err = read_full(fd, &rbuf[4], len);
     if (err) {
@@ -108,7 +106,7 @@ static int32_t read_res(int fd) {
         return err;
     }
 
-    // print the result
+    // TODO: add support to read serialization format
     uint32_t rescode = 0;
     if (len < 4) {
         msg("bad response");
@@ -145,8 +143,10 @@ int main(int argc, char **argv) {
     }
     err = read_res(fd);
     if (err) {
+        printf("ERROR\n");
         goto L_DONE;
     }
+    printf("AFTER ERR\n");
 
 L_DONE:
     close(fd);
